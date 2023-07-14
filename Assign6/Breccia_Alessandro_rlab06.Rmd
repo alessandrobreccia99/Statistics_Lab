@@ -1,0 +1,286 @@
+---
+title: "Breccia_Alessandro_rlab06"
+output: html_document
+date: "2023-05-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+EX 1
+
+MCMC analysis
+
+```{r}
+library(coda)
+metropolis_hastings.1dim <- function(func, mu_0, n_samp, sig, burn_in, thin) {
+    mu <- mu_0
+    n_acc <- 0
+    chain <- c()
+    chain <- append(chain,mu)
+    for (i in 1:n_samp){
+      new_mu <- rnorm(n=1, mu, sig)
+      bound <- min(func(new_mu)/func(mu),1)
+      dice <- runif(1,0,1)
+      if(dice<bound){
+         mu <- new_mu
+         if(i>burn_in){
+            chain <- append(chain,mu)
+         }
+         n_acc <- n_acc +1
+      }
+      else{
+        if(i>burn_in){
+         chain <- append(chain,mu)
+        }
+      }
+    } 
+    results <- chain[seq(1,length(chain),thin)]
+    return( results )
+}
+
+library(parallel)
+library(foreach)
+library(doParallel)
+
+```
+
+```{r}
+
+x <- seq(-10,10,0.01)
+post <- function(x){
+    return(0.5*dnorm(x = x, mean = -3, sd = 1) +  0.5*dnorm(x = x, mean = 3, sd = 1))
+}
+
+# I decided to use parallelization otherwise it would take hours
+totalCores = detectCores()
+
+# Leave one core free
+cluster <- makeCluster(totalCores[1]-1) 
+
+# Start the cluster
+registerDoParallel(cluster)
+
+burn <- c(100,200,1000)
+th <- c(5,25,50)
+# Run on the cluster
+for (i in burn){
+  for (j in th){
+      g_chain <- foreach(i = 1:200, .combine= append) %dopar% {
+      metropolis_hastings.1dim(post, 0, 10000, 1, i, j)
+      }
+  g_mcmc <- mcmc(g_chain)
+  h <- hist(g_mcmc,breaks=300,plot = FALSE)
+  h$counts <- h$counts/length(h$counts)
+  g <- post(x)
+  
+ # plot(summary(g_mcmc))
+  plot(h, main = paste("Burn-in and thinning = ", i,",",j) )
+  plot(g_mcmc)
+  plot(acf(g_mcmc, lag.max = 1000, plot = FALSE)$acf)
+  cat("---------------------------------------------------------------------------")
+  }
+}
+# Stop cluster 
+stopCluster(cluster)
+
+g_mcmc <- mcmc(g_chain)
+
+cat("The best choice in terms of burn-in cycles and thinning seems to be a thinning of 5, that does not produce the peak at 0 present in the other cases. For what concern the burn-in, it would be better to have a quite robust burn-in, but at the same time we would have to generate more samples. The best trade-off in this case is burn-in of 200 cycles, that generate a auto correlation function which rapidly goes to 0")
+```
+
+EX 2
+
+```{r}
+library(R2jags)
+
+Efficacy <- function(r_vax, n_vax, r_plac, n_plac ){
+
+eff <- (r_plac/n_plac - r_vax/n_vax)/(r_plac/n_plac)
+
+model <- "model{
+
+  # Likelihood
+  y ~ dbinom(Prob_vax, n_vax) 
+  
+  x ~ dbinom(Prob_placebo, n_plac)
+  
+  Efficacy <- (Prob_placebo-Prob_vax)/Prob_placebo
+  
+  # Prior
+  Prob_vax ~ dunif(0, 1)
+  Prob_placebo ~ dunif(0, 1)
+
+}"
+
+datalist <- list( y= r_vax, n_vax= n_vax, x= r_plac, n_plac= n_plac )
+
+jm_vax <- jags.model(file= textConnection(model), data= datalist , n.chains = 3)
+
+update(jm_vax, n.iter = 1000)
+
+Nrep = 1000000 
+
+posterior_sample_eff <- coda.samples(jm_vax,
+                        variable.names = c("Efficacy","Prob_vax","Prob_placebo"),
+                        n.iter = Nrep)
+# getting the results
+
+sum <- summary(posterior_sample_eff)
+quantile_2.5_vax <- sum$quantiles[3, 1]
+quantile_97.5_vax <- sum$quantiles[3, 5]
+quantile_2.5_plac <- sum$quantiles[2, 1]
+quantile_97.5_plac <- sum$quantiles[2, 5]
+quantile_2.5_eff <- sum$quantiles[1, 1]
+quantile_97.5_eff <- sum$quantiles[1, 5]
+
+mcmc_list <- as.mcmc.list(posterior_sample_eff)
+
+#getting all the chains
+
+sam_vax <- c(c(mcmc_list[[1]][,3]),c(mcmc_list[[2]][,3]),c(mcmc_list[[3]][,3]))
+sam_pla <- c(c(mcmc_list[[1]][,2]),c(mcmc_list[[2]][,2]),c(mcmc_list[[3]][,2]))
+eff <- c(c(mcmc_list[[1]][,1]),c(mcmc_list[[2]][,1]),c(mcmc_list[[3]][,1]))
+
+# Plots
+# Prob vax
+
+hist(sam_vax, breaks = 100, main= "Probability of vaccinated people", xlab = "Prob", col="lightblue" )
+abline(v=c(quantile_2.5_vax,quantile_97.5_vax), lty=c(2,2), col=c("red","red"))
+text(x=quantile_97.5_vax*1.05, y=100000, paste("Upp 95% bound=",round(quantile_97.5_vax,4)), col="darkred" ,cex=1)
+text(x=quantile_2.5_vax*0.95, y=100000, paste("Low 95% bound=",round(quantile_2.5_vax,4)), col="darkred" ,cex=1)
+
+# Prob plac
+
+hist(sam_pla, breaks = 100, main= "Probability of placebo people", xlab = "Prob",col="lightblue")
+abline(v=c(quantile_2.5_plac,quantile_97.5_plac), lty=c(2,2), col=c("red","red"))
+text(x=quantile_97.5_plac*1.05, y=100000, paste("Upp 95% bound=",round(quantile_97.5_plac,4)), col="darkred" ,cex=1)
+text(x=quantile_2.5_plac*0.95, y=100000, paste("Low 95% bound=",round(quantile_2.5_plac,4)), col="darkred" ,cex=1)
+
+# Efficacy
+
+hist(eff, breaks = 100, main= "Efficacy", xlab = "Efficacy" ,col="lightblue")
+abline(v=c(quantile_2.5_eff,quantile_97.5_eff), lty=c(2,2), col=c("red","red"))
+text(x=quantile_97.5_eff, y=100000, paste("Upp 95% bound=",round(quantile_97.5_eff,4)), col="darkred" ,cex=1)
+text(x=quantile_2.5_eff*0.95, y=100000, paste("Low 95% bound=",round(quantile_2.5_eff,4)), col="darkred" ,cex=1)
+
+return(posterior_sample_eff)
+}
+```
+
+EX 2.1
+
+JCOVDEN
+
+This study involved over 44,000 people. Half received a single dose of the vaccine and half were given placebo (a dummy injection). People did not know if they had been given Jcovden or placebo. The trial found a 67% reduction in the number of symptomatic COVID-19 cases after 2 weeks in people who received Jcovden (116 cases out of 19,630 people) compared with people given placebo (348 of 19,691 people). This means that the vaccine had a 67% efficacy.
+
+```{r}
+library(coda)
+library(rjags)
+library(tidybayes)
+
+r_vax <- 116
+n_vax <- 19630
+
+r_plac <- 348
+n_plac <- 19691
+
+cat("The Efficacy of the Jansenn vaccine is", 100*round((r_plac/n_plac-r_vax/n_vax)/(r_plac/n_plac),3), "%, as declared by the company. \n" )
+
+eff_Jansenn <- Efficacy(r_vax, n_vax, r_plac, n_plac )
+```
+
+MODERNA
+
+The trial showed a 94.1% reduction in the number of symptomatic COVID-19 cases in the people who received the vaccine (11 out of 14,134 vaccinated people got COVID-19 with symptoms) compared with people who received dummy injections (185 out of 14,073 people who received dummy injections got COVID-19 with symptoms). This means that the vaccine demonstrated a 94.1% efficacy in the trial.
+
+```{r}
+
+r_vax = 11
+n_vax = 14134
+
+r_plac = 185
+n_plac = 14073
+
+cat("The Efficacy of the Moderna vaccine is ", 100*round((r_plac/n_plac-r_vax/n_vax)/(r_plac/n_plac),3), "%, as declared by the company. \n" )
+eff_Moderna <- Efficacy(r_vax, n_vax, r_plac, n_plac )
+
+```
+
+Ex 3
+
+Vaccinations report
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+vacc <- read.csv("vaccinations.csv")
+tot_vac <- subset(vacc, location == c("World","Europe","Asia","Africa","North America","South America", "Oceania"))[c("location","date","total_vaccinations")]
+tot_vac$date <- as.Date( tot_vac$date)
+
+day_vac <- subset(vacc, location == c("World","Europe","Asia","Africa","North America","South America", "Oceania"))[c("location","date","daily_people_vaccinated")]
+day_vac$date <- as.Date( day_vac$date)
+
+# Compute the week average
+
+w <- subset(vacc, location == c("World"))[c("date","daily_people_vaccinated")]
+w$date <- as.Date( w$date)
+w$week_num <- strftime(w$date, format = "%V")
+w$year <- strftime(w$date, format = "%G")
+week_avg <- w %>% group_by(week_num,year) %>% summarise(week_average=mean(daily_people_vaccinated), .groups='drop')
+
+week_avg <- week_avg %>% mutate(x = make_date(year)) %>% mutate(date = x + lubridate::weeks(week_num)) 
+
+week_avg <- week_avg[order(week_avg$year,week_avg$week_num),]
+
+# Plot the results
+
+day_doses <- subset(vacc, location == c("World","Europe","Asia","Africa","North America","South America", "Oceania"))[c("location","date","daily_vaccinations")]
+day_doses$date <- as.Date( day_doses$date)
+
+ggplot(data=tot_vac, mapping = aes(x = date, y = total_vaccinations)) + geom_line(aes(color=location)) + ggtitle("Cumulative distribution of vaccinated people for Covid-19") +   ylab("Number of people")
+
+ggplot(data=week_avg, aes(x=date, y=week_average)) + geom_line() + ggtitle("Distribution of vaccinated people for Covid-19 in the World, weekly averaged") +   ylab("Number of people")
+
+ggplot(data=day_vac, mapping = aes(x = date, y = daily_people_vaccinated)) + geom_line(aes(color=location)) + ggtitle("Distribution of vaccinated people for Covid-19, daily") +   ylab("Number of people")
+
+ggplot(data=day_doses, mapping = aes(x = date, y = daily_vaccinations)) + geom_line(aes(color=location)) + ggtitle("Distribution of administered doses for Covid-19") +   ylab("Number of doses")
+```
+
+Deaths report
+
+```{r}
+
+death <- read_csv("total_deaths.csv")
+death$date <- as.Date(death$date)
+
+week_death <- read_csv("weekly_deaths.csv")
+week_death$date <- as.Date(week_death$date)
+
+ggplot(data= death,  aes(date)) + geom_line(aes(y= World, color = "World")) + 
+                                  geom_line(aes(y= Europe, color = "Europe")) +
+                                  geom_line(aes(y= Asia, color = "Asia")) +
+                                  geom_line(aes(y= Africa, color = "Africa")) +
+                                  geom_line(aes(y= Oceania, color = "Oceania")) +
+                                  geom_line(aes(y= North_America, color = "North America")) +
+                                  geom_line(aes(y= South_America, color = "South America")) +                                    ggtitle("Cumulative distribution of death by Covid-19") +                                      ylab("Number of people")
+
+ggplot(data= week_death,  aes(date)) + geom_line(aes(y= World, color = "World")) + 
+                                  geom_line(aes(y= Europe, color = "Europe")) +
+                                  geom_line(aes(y= Asia, color = "Asia")) +
+                                  geom_line(aes(y= Africa, color = "Africa")) +
+                                  geom_line(aes(y= Oceania, color = "Oceania")) +
+                                  geom_line(aes(y= North_America, color = "North America")) +
+                                  geom_line(aes(y= South_America, color = "South America")) +                                    ggtitle(" Distribution of death by Covid-19, weekly averaged") +                               ylab("Number of people")
+
+
+```
+
+```{r}
+
+
+```
+
+## 

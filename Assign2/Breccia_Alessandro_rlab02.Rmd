@@ -1,0 +1,235 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r}
+library(tidyverse)
+```
+
+Ex. 1
+
+```{r}
+
+dfp <- function(k){
+  if ( k==1 || k==2 || k==3 || k==4 || k==5 ){
+    return(k/15)
+  }
+  else{
+    return(0)
+  }
+}
+
+cfp <- function(k){
+  c <- 0
+  for(i in 1:k){
+    c = c + dfp(i)
+  }
+  return(c) 
+}
+
+
+```
+
+```{r, fig.width = 10, fig.height=5}
+library("tidyverse")
+x <- c(-1,0,1,2,3,4,5,5.01,6,7)
+for (i in 1:length(x)){
+  if (i==1){
+    pdf <- dfp(x[i])
+    cdf <- cfp(x[i])
+  }
+  else{
+    pdf <- append(pdf,dfp(x[i]))
+    cdf <- append(cdf,cfp(x[i]))
+  }
+}
+
+ggplot(mapping =aes(x=x,y=pdf)) + geom_point() + geom_line() +scale_x_continuous(breaks = scales::pretty_breaks(n = length(x))) +ggtitle("Probability density function")
+
+```
+
+```{r,fig.width = 10, fig.height=5}
+ggplot(mapping = aes(x=x,y=cdf)) + geom_point() + geom_line() + scale_x_continuous(breaks = scales::pretty_breaks(n = length(x))) + ggtitle("Cumulative density function")
+
+```
+
+```{r}
+cat("The mean value of the dist is", sum(x*pdf),"\n")
+cat("The variance of the dist is", sum(x*x*pdf)-sum(x*pdf)*sum(x*pdf),"\n")
+
+```
+
+```{r}
+
+Exp_val = sum(x*(6-x)*pdf)
+cat("The expected value of k(k-6) over the above density function is", Exp_val)
+```
+
+```{r}
+
+rfp <- function(){
+  x <- runif(1, 0, 1)
+  v <- round(sqrt(30*x),0)
+  if (v<1){
+    return(1)
+  }
+  else{
+    return(v)
+  }
+}
+
+probability <- c()
+for(i in 1:10000){
+   probability <- append(probability,rfp())
+}
+
+p <- data.frame(probability)
+orig_pdf <- data.frame(x=x,y=pdf)
+
+ggplot(p, aes(x=probability))  +
+  geom_histogram(aes(y=after_stat(density)), breaks=x , alpha=0.6) +geom_line(data= orig_pdf, aes(x=x,y=pdf)) + ggtitle("Sampled vs. Original Distribution")
+```
+
+Ex. 2
+
+```{r}
+a <- 0
+b <- 4
+c <- 3
+
+dtri <- function(x,a,b,c){
+  if (x<c & x>0){
+    return(2*(x-a)/((b-a)*(c-a)))
+  }
+  else if ((x>c | x==c) & x<b) {
+    return(2*(b-x)/((b-a)*(b-c)))
+  }
+  else{
+    return(0)
+  }
+}
+
+xx <- seq(from = -1, to = 5, by = 0.1)
+tri <- c()
+for(i in 1:length(xx)){
+  tri <- append(tri,dtri(xx[i],a,b,c))
+}
+ 
+ggplot(mapping = aes(x=xx,y=tri)) + geom_point() + geom_line() + scale_x_continuous(breaks = scales::pretty_breaks(n = length(xx)/5)) +ggtitle("Probability density function")
+```
+
+```{r}
+
+ctri <- function(a,b,c){
+  
+  y <- runif(1, 0, 1)
+  if (y<c/b){
+     k <- 2/((b-a)*(c-a))
+     return((a*k+sqrt(a*a*k*k+2*k*y))/(k))
+  }
+  else{
+     k <- 2/((b-a)*(b-c))
+     y <- y+k*c*(b-c/2)-c/b
+     return((b*k-sqrt(b*b*k*k-2*k*y))/(k))
+  }
+}
+
+probtri <- c()
+for(i in 1:10000){
+   probtri <- append(probtri,ctri(a,b,c))
+}
+
+pt <- data.frame(probtri)
+orig_pdf <- data.frame(x=xx,y=tri)
+
+ggplot(pt, aes(x=probtri))  +
+  geom_histogram(aes(y=after_stat(density)),breaks=xx,alpha=0.6) + geom_line(data= orig_pdf, aes(x=x,y=tri)) + ggtitle("Sampled vs. Original Distribution")
+```
+
+Ex. 3
+
+```{r}
+x <- seq(from = 0, to = 200, by = 1)
+
+distprofit <- dexp( x , rate=1/30 )
+
+Empirical_distribution <- rexp(60,rate=1/30 )
+h <- hist(Empirical_distribution, breaks=50)
+
+cat("The probability to wait less than 12 minutes is", pexp(12,rate=1/30),"\n")
+cat("The empirical average is ", mean(Empirical_distribution) ,"while the real average is", sum(distprofit*x) ,"\n")
+cat("The probability to wait more than 1 hour is", 1-pexp(60,rate=1/30))
+
+
+
+
+
+
+```
+
+Ex. 4
+
+```{r}
+p <- 1
+randp <- 0.2
+prior <- 0.7
+
+pro <- p*prior/(randp*(1-prior)+p*prior)
+print(pro)
+```
+
+Ex. 5
+
+```{r}
+unif_pdf <- function(x){
+  if ( x>0 & x<60){
+    return(1/60)
+  }
+  else{
+    return(0)
+  }
+}
+cunif <- function(x){
+  if(x<= 60 & x>=0){
+    return(x/60)
+  }
+  else{
+    return(0)
+    }
+}
+t <- c()
+for (i in 1:60){
+  if (i<=15){
+    t <- append(t,abs(15-i))
+  }
+  else if(i<=45){
+    t <- append(t,abs(45-i))
+  }
+  else{
+    t <- append(t,abs(75-i))
+  }
+}
+
+cat("The prob to wait al most 10 minute is", 20/60,"\n")
+cat("The prob to wait at least 15 minute is", 30/60, "\n")
+cat("The mean time spent waiting is", mean(t))
+```
+
+Ex. 6
+
+```{r}
+mean <- 0.10
+std <- 0.12
+sh <- 200
+price <- 85
+
+total <- sh*price
+x <- seq(from = 800, to = total*mean+total*mean*5, by = 100)
+
+distprofit <- dnorm(x,mean=total*mean,sd = total*std)
+barplot(distprofit,names=x, main = 'Part of the distribution to be integrate')
+cat("The probability of a net profit of al least 800$ is",1-pnorm(800,mean=total*mean,sd=total*std))
+```

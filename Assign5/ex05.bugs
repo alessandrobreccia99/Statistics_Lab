@@ -1,0 +1,7 @@
+
+model {
+    # data likelihood
+    X ~ dbinom(r, n) 
+    # a uniform prior for p
+    p  ~ dbeta(1, 1);
+}

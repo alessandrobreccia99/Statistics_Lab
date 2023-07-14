@@ -1,0 +1,192 @@
+---
+---
+---
+
+```{r}
+library(tidyverse)
+
+df_amer_air <- read.delim(file='/Users/alessandrobreccia/Desktop/1_ANNO_MAGISTR/2_semester/AdvStat/Lab/Rlab01/american_airline_empl.txt', header=TRUE)
+df_delta_air <- read.delim(file='/Users/alessandrobreccia/Desktop/1_ANNO_MAGISTR/2_semester/AdvStat/Lab/Rlab01/delta_airline_empl.txt', header=TRUE)
+df_federal_express_air <- read.delim(file='/Users/alessandrobreccia/Desktop/1_ANNO_MAGISTR/2_semester/AdvStat/Lab/Rlab01/federal_express_empl.txt', header=TRUE)
+df_united_airline_empl <- read.delim(file='/Users/alessandrobreccia/Desktop/1_ANNO_MAGISTR/2_semester/AdvStat/Lab/Rlab01/united_airline_empl.txt', header=TRUE)
+
+```
+
+IMPORT AND PROCESSING DATA:
+
+```{r}
+df_amer_air <- df_amer_air %>% add_column(Company="American Airline")
+df_delta_air <- df_delta_air %>% add_column(Company="Delta Airline")
+df_federal_express_air <- df_federal_express_air %>% add_column(Company="Federal Express Airline")
+df_united_airline_empl <- df_united_airline_empl %>% add_column(Company="United Airline") 
+
+```
+
+```{r}
+df_tot <- full_join(df_amer_air,(full_join(df_delta_air,full_join(df_federal_express_air,df_united_airline_empl))))
+df_tot$Full.time <- gsub(',','',df_tot$Full.time) %>% strtoi()
+df_tot$Part.time <- gsub(',','',df_tot$Part.time) %>% strtoi()
+df_tot$Grand.Total <- gsub(',','',df_tot$Grand.Total) %>% strtoi()
+```
+
+```{r}
+df_tot$date <- as.Date(with(df_tot, paste(Year, Month,1,sep="-")), "%Y-%m-%d")
+
+```
+
+1.3 : Behaviour of the employees as function of time.
+
+Full Time Employees:
+
+```{r,  fig.width = 14, fig.height=6}
+library(tidyverse)
+ggplot(data = df_tot, mapping = aes(x = date, y = Full.time)) +
+    geom_point(aes(color = Company)) + geom_line(aes(color = Company)) + ggtitle('Full-time employees')
+
+```
+
+Part Time Employees:
+
+```{r,  fig.width = 14, fig.height=6}
+ggplot(data = df_tot, mapping = aes(x = date, y = Part.time)) +
+    geom_point(aes(color = Company)) + geom_line(aes(color = Company)) + ggtitle('Part-time employees')
+
+```
+
+1.4: Maximum and minimum of each company:
+
+```{r}
+
+companylist <- c('American Airline','Delta Airline','Federal Express Airline','United Airline') 
+
+for(i in 1:4){
+      maxemplame <- which.max(df_tot[df_tot$Company == companylist[i],]$Grand.Total) 
+      minemplame <- which.min(df_tot[df_tot$Company == companylist[i],]$Grand.Total) 
+      
+      cat("The maximum number of employees of the", companylist[i] ,"is at", as.character(df_tot[df_tot$Company == companylist[i],]$date[maxemplame]), "and is", df_tot[df_tot$Company == companylist[i],]$Grand.Total[maxemplame], "employees\n" )
+
+      cat("The minimum number of employees of the", companylist[i] ,"is at", as.character(df_tot[df_tot$Company == companylist[i],]$date[maxemplame]), "and is", df_tot[df_tot$Company == companylist[i],]$Grand.Total[maxemplame], "employees\n"  )
+
+
+}
+
+```
+
+1.5: Fraction of the part-time and full-time worker as function of the year
+
+```{r,  fig.width = 14, fig.height=6}
+ggplot(data = df_tot, mapping = aes(x = date, y = Part.time/Grand.Total)) +
+    geom_point(aes(color = Company)) + geom_line(aes(color = Company)) + ggtitle('Part-time fraction of employees')
+```
+
+```{r, fig.width = 14, fig.height=6}
+ggplot(data = df_tot, mapping = aes(x = date, y = Full.time/Grand.Total)) +
+    geom_point(aes(color = Company)) + geom_line(aes(color = Company)) + ggtitle('Full-time fraction of employees')
+```
+
+1.6: Behaviour of the total number of employees per company around 2020
+
+```{r, fig.width = 14, fig.height=6}
+ggplot(data = subset(df_tot,df_tot$date > '2019-01-01'), mapping = aes(x = date, y = Grand.Total)) +
+    geom_point(aes(color = Company)) + geom_line(aes(color = Company)) + ggtitle('Total number of employees ')
+```
+
+We can see in 3 out of 4 companies a clear drop in the total number of employees around the middle of the 2020, right after the beginning of the pandemic.
+
+## \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\--Exercise 2 \-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\--
+
+```{r}
+
+library(nycflights13)
+library(tidyverse)
+```
+
+```{r}
+
+flights$date <- as.Date(with(flights, paste(year, month,day,sep="-")), "%Y-%m-%d")
+
+```
+
+2.1: Total number of flights departed from the 3 New York City airports
+
+```{r,  fig.width = 14, fig.height=6}
+library(dplyr)
+flights$wdate <- weekdays(as.Date(flights$date))
+
+totflight <- flights %>%  group_by(date,wdate,origin) %>% summarise(count=n(), .groups='drop')
+
+ggplot(data = totflight, mapping = aes(x = date, y = count)) +
+    geom_point(aes(color = origin)) + ggtitle('flights departed from New York City airports')
+```
+
+2.2.1: The average number of flights during the week, compared with the average number of flights during the week end
+
+```{r}
+totflight$week <- strftime(totflight$date, format = "%V")
+
+```
+
+```{r, fig.width = 14, fig.height=6 }
+avgweekend <- totflight[ totflight$wdate == 'Saturday' | totflight$wdate == 'Sunday' , ] %>%  group_by(week) %>% summarise(mean=mean(count),.groups='drop')
+
+avgweek <- totflight[ totflight$wdate == 'Monday' | totflight$wdate == 'Tuesday'  | totflight$wdate == 'Wednesday'  | totflight$wdate == 'Thursday'  | totflight$wdate == 'Friday' ,] %>%  group_by(week) %>% summarise(mean=mean(count),.groups='drop')
+
+avgweekend <- avgweekend %>% add_column(id='week-end')
+avgweek <- avgweek %>% add_column(id='week')
+
+avg= rbind(avgweekend,avgweek)
+
+ggplot(data = avg, mapping = aes(x = week, y = mean)) +
+    geom_point(aes(color = id)) + ggtitle('Week average and week-end average number of fligths')
+
+
+```
+
+2.2.2: Max, Min and average of delay as function of time
+
+```{r,  fig.width = 14, fig.height=6 }
+library(reshape2)
+
+maxdel <- flights %>%  group_by(date) %>% summarise(max_delay=max(dep_delay, na.rm=TRUE), min_delay=min(dep_delay, na.rm=TRUE), avg_delay=mean(dep_delay, na.rm=TRUE))
+
+maxdel <- melt(maxdel ,  id.vars = 'date', variable.name = 'delays', value.name='minutes' )
+
+ggplot( data=maxdel, mapping = aes(x = date, y = minutes)) + geom_line(aes(color = delays)) + ggtitle('Max, Min and average of delay')
+```
+
+2.3: Average speed of planes divided in companies as function of time
+
+```{r, fig.width = 14, fig.height=6}
+flights$speed <- flights$distance/((flights$air_time %/% 100) + (flights$air_time %% 100)/60)
+
+avgspeed <- flights %>%  group_by(date,origin) %>% summarise(avg=mean(speed, na.rm=TRUE), .groups='drop')
+
+ggplot(data = avgspeed, mapping = aes(x = date, y = avg)) + geom_point(aes(color= origin)) + ggtitle('Average speed of planes')
+
+```
+
+2.4: Analyzing the offers of the various companies
+
+```{r}
+flights$week <- strftime(flights$date, format = "%V")
+
+perday <- flights %>%  group_by(date,carrier) %>% summarise(flights_per_day=n(), .groups='drop')
+perday <- perday %>%  group_by(carrier) %>% summarise(mean_flights_per_day=mean(flights_per_day))
+
+perweek <- flights %>%  group_by(week,carrier) %>% summarise(flights_per_week=n(), .groups='drop')
+perweek <- perweek %>%  group_by(carrier) %>% summarise(mean_flights_per_week=mean(flights_per_week))
+
+permonth <- flights %>%  group_by(month,carrier) %>% summarise(flights_per_month=n(), .groups='drop')
+permonth <- permonth %>%  group_by(carrier) %>% summarise(mean_flights_per_month=mean(flights_per_month))
+
+distpermoth <- flights %>%  group_by(month,carrier) %>% summarise(dist=max(distance, na.rm=TRUE), .groups='drop')
+distpermoth <- distpermoth %>%  group_by(carrier) %>% summarise(mean_dist_per_month=mean(dist))
+
+
+cat("The company offering the largest number of flights per day is",perday$carrier[which.max(perday$mean_flights_per_day)],"with a value of",perday$mean_flights_per_day[which.max(perday$mean_flights_per_day)],"\n")
+cat("The company offering the largest number of flights per week is",perweek$carrier[which.max(perweek$mean_flights_per_week)],"with a value of",perweek$mean_flights_per_week[which.max(perweek$mean_flights_per_week)],"\n")
+cat("The company offering the largest number of flights per month is",permonth$carrier[which.max(permonth$mean_flights_per_month)],"with a value of",permonth$mean_flights_per_month[which.max(permonth$mean_flights_per_month)],"\n")
+cat("The company offering the largest covered distance per month is",distpermoth$carrier[which.max(distpermoth$mean_dist_per_month)],"with a value of",distpermoth$mean_dist_per_month[which.max(distpermoth$mean_dist_per_month)],"\n")
+
+
+```

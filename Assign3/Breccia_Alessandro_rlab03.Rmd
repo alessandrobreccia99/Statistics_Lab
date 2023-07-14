@@ -1,0 +1,396 @@
+---
+title: "Assignment3"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-04-20"
+---
+
+Ex 1
+
+```{r}
+
+n <- 20
+r <- 7
+
+prob <- seq(from =0.1, to =1000, by=1)/1000
+like <- dbinom(x=r, size=n, prob)
+
+Fprior <- 1
+Jprior <- dbeta(x = prob, shape1 = 1/2 , shape2 = 1/2)
+
+Sprior <- function(x){
+  f <- c()
+  for (i in x){ 
+      if(i<0.2){
+        f <- append(f,i)
+      }
+      else if(0.2<i & i<0.3){
+        f <- append(f,0.2)
+      }
+      else if(0.3<i & i<0.5){
+        f <- append(f,0.5-i)
+      }
+      else{
+        f <- append(f,0)
+      }
+  }
+  return(f)
+}
+conf <- function(x,delta,c){
+  p <- 0
+  j <- 0
+  low <- 0
+  high <- 0
+  Z = sum(x*delta)
+  for (i in x){
+    p <- p+i*delta/Z
+    if (p>=(1-c)/2){
+      low <- j
+      break
+    }
+    j <- j+1
+  }
+  p <- 0
+  j <- 0
+  for (i in x){
+    p <- p+i*delta/Z
+    if (p>=c+(1-c)/2){
+      high <- j
+      break
+    }
+    j <- j+1
+  }
+  return(c(low*delta,high*delta))
+}
+PartFunc <- function(x,delta){
+  return(sum(x*delta))
+}
+
+sprior <- Sprior(prob)
+ZF <- PartFunc(like*Fprior,1/1000)
+ZJ <- PartFunc(like*Jprior,1/1000)
+ZS <- PartFunc(like*sprior,1/1000)
+Fpost <- like*Fprior/(ZF)
+Jpost <- like*Jprior/(ZJ)
+Spost <- like*sprior/(ZS)
+
+cat("The confidence interval for the posterior of the Unif prior is ",conf(Fpost,1/1000, 0.95),"\n")
+cat("The confidence interval for the posterior of the Jeffrey prior is",conf(Jpost,1/1000, 0.95),"\n")
+cat("The confidence interval for the posterior of the Step prior is",conf(Spost,1/1000, 0.95),"\n")
+
+bpost <- dbeta(x= prob, shape1= r+1/2, shape2= n-r+1/2)
+plot(prob, bpost)
+lines(prob,Jpost)
+
+```
+
+```{r}
+plot(prob,Spost, col="black",type="l",lwd=2 ,lty=1,xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(Spost,1/1000, 0.95), col=c("black", "black"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,Jpost, col="red",lty=2,lwd=2)
+abline(v=conf(Jpost,1/1000, 0.95), col=c("red", "red"), lty=c(2,2), lwd=c(2, 2))
+
+lines(prob,Fpost, col="blue",lty=3,lwd=2)
+abline(v=conf(Fpost,1/1000, 0.95), col=c("blue", "blue"), lty=c(3,3), lwd=c(2, 2))
+
+legend(x="topright",legend=c("Step-Posterior","Jeffrey-Posterior","Uniform-Posterior"), col=c("black","red","blue"),lty=c(1,2,3), cex=0.8)
+
+x <- c("Mean","Lower 95% bound","Upper 95% bound")
+jeffrey_post <- c(which.max(Jpost)*1/1000,conf(Jpost,1/1000, 0.95))
+uniform_post <- c(which.max(Fpost)*1/1000,conf(Fpost,1/1000, 0.95))
+step_post <- c(which.max(Spost)*1/1000,conf(Spost,1/1000, 0.95))
+summ <- data.frame(x,jeffrey_post, uniform_post, step_post)
+print(summ)
+```
+
+Ex 2
+
+```{r}
+r <- 17
+n <- 116
+space <- 0.001
+x <- seq(from = 0.01,to = 0.3, by=space)
+
+uni_post <- dbeta( x = x, r+1, n-r+1 )
+beta_post <- dbeta( x = x ,r+1, n-r+4 )
+
+plot(x,uni_post, type='l', col='blue')
+abline(v=which.max(uni_post)*space+0.01)
+lines(x,beta_post, type='l', col='darkgreen')
+abline(v=which.max(beta_post)*space+0.01)
+
+mom1_uni <- sum(uni_post*x*space)
+mom2_uni <- sum(uni_post*x*x*space)
+std_uni <- sqrt(mom2_uni - mom1_uni*mom1_uni)
+cat("first mom uni",mom1_uni,"second mom uni",mom2_uni,"\n")
+
+mom1_beta <- sum(beta_post*x*space)
+mom2_beta <- sum(beta_post*x*x*space)
+std_beta <- sqrt(mom2_beta - mom1_beta*mom1_beta)
+cat("first mom beta",mom1_beta,"second mom beta",mom2_beta,"\n")
+
+app_uni <- dnorm(x=x, mean = mom1_uni, sd=std_uni )
+app_beta <- dnorm(x=x, mean = mom1_beta, sd=std_beta )
+
+plot(x,app_uni, type='l', col='blue')
+abline(v=which.max(app_uni)*space+0.01)
+lines(x,app_beta, type='l', col='darkgreen')
+abline(v=which.max(app_beta)*space+0.01)
+
+cat("first mom uni",sum(app_uni*x*space),"second mom uni",sum(app_uni*x*x*space),"\n")
+cat("first mom uni",sum(app_beta*x*space),"second mom uni",sum(app_beta*x*x*space),"\n")
+```
+
+```{r}
+
+n <- 116
+r <- 17
+N <- 1000
+prob <- seq(from =0.1, to =N, by=1)/N
+like <- dbinom(x=r, size=n, prob)
+
+Uprior <- 1
+Bprior <- dbeta(prob, shape1 = 1, shape2 = 4)
+
+Zu <- PartFunc(like*Uprior, 1/N)
+Zb <- PartFunc(like*Bprior, 1/N)
+
+Upost <- like*Uprior/Zu
+Bpost <- like*Bprior/Zb
+
+Ufirst <- sum(prob*Upost*1/N)
+Usecond <- sum(prob*prob*Upost*1/N)
+Umax_ind <- which.max(Upost)
+Usig <- 1/sqrt(-1*(log(Upost[Umax_ind-1])-2*log(Upost[Umax_ind])+log(Upost[Umax_ind+1]))/(1/(N*N)))
+  
+Bfirst <- sum(prob*Bpost*1/N)
+Bsecond <- sum(prob*prob*Bpost*1/N)
+Bmax_ind <- which.max(Bpost)
+Bsig <- 1/sqrt(-1*(log(Bpost[Bmax_ind-1])-2*log(Bpost[Bmax_ind])+log(Bpost[Bmax_ind+1]))/(1/(N*N)))
+
+UGauss <- dnorm(prob, mean =Umax_ind*1/N, sd= Usig)
+BGauss <- dnorm(prob, mean =Bmax_ind*1/N, sd= Bsig)
+
+```
+
+```{r}
+
+par(mfrow=c(1,2)) 
+
+plot(prob,Bpost, col="blue",type="l",lwd=2 ,lty=1, xlim=c(0,0.5),xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(Bpost,1/1000, 0.95), col=c("blue", "blue"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,Upost, col="red",lty=2,lwd=2)
+abline(v=conf(Upost,1/1000, 0.95), col=c("red", "red"), lty=c(2,2), lwd=c(2, 2))
+legend(x="topright",legend=c("Beta-posterior","Uniform-posterior"), col=c("blue","red"),lty=c(1,2), cex=0.6)
+
+plot(prob,BGauss, col="black",type="l",lwd=2 ,lty=1, xlim=c(0,0.5),xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(BGauss,1/1000, 0.95), col=c("black", "black"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,UGauss, col="darkgreen",lty=2,lwd=2)
+abline(v=conf(UGauss,1/1000, 0.95), col=c("darkgreen", "darkgreen"), lty=c(2,2), lwd=c(2, 2))
+legend(x="topright",legend=c("Beta-post Gaussian approx","Unif-post Gaussian approx"), col=c("black","darkgreen"),lty=c(1,2), cex=0.5)
+
+cat("The first and the second moment of the posterior of the unif prior are:", Ufirst,",", Usecond, "\n")
+cat("The first and the second moment of the posterior of the beta prior are:", Bfirst," ", Bsecond, "\n")
+
+```
+
+```{r}
+
+par(mfrow=c(1,2)) 
+
+plot(prob,Bpost, col="blue",type="l",lwd=2 ,lty=1, xlim=c(0,0.5),xlab = "Probability",ylab = "Probability Density")
+grid()
+abline(v=conf(Bpost,1/1000, 0.95), col=c("blue", "blue"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,BGauss, col="red",lty=2,lwd=2)
+abline(v=conf(BGauss,1/1000, 0.95), col=c("red", "red"), lty=c(2,2), lwd=c(2, 2))
+legend(x="topright",legend=c("Beta-posterior","Beta-post Gaussian approx"), col=c("blue","red"),lty=c(1,2), cex=0.5)
+
+plot(prob,Upost, col="black",type="l",lwd=2 ,lty=1, xlim=c(0,0.5),xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(Upost,1/1000, 0.95), col=c("black", "black"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,UGauss, col="darkgreen",lty=2,lwd=2)
+abline(v=conf(UGauss,1/1000, 0.95), col=c("darkgreen", "darkgreen"), lty=c(2,2), lwd=c(2, 2))
+legend(x="topright",legend=c("Uniform-posterior","Unif-post Gaussian approx"), col=c("black","darkgreen"),lty=c(1,2), cex=0.5)
+
+```
+
+Ex 3
+
+```{r}
+
+n <- 30
+r <- 15
+N <- 1000
+prob <- seq(from = 0.1, to = N, by = 1)/N
+like <- dbinom(x=r, size=n, prob)
+like <- like/PartFunc(like,1/N)
+
+
+Uprior <- rep(1,N)
+Bprior <- dbeta(prob, shape1 = 3, shape2 = 2)
+
+Zu <- PartFunc(like*Uprior, 1/N)
+Zb <- PartFunc(like*Bprior, 1/N)
+
+Upost <- like*Uprior/Zu
+Bpost <- like*Bprior/Zb
+
+Ufirst <- sum(prob*Upost*1/N)
+Usecond <- sum(prob*prob*Upost*1/N)
+  
+Bfirst <- sum(prob*Bpost*1/N)
+Bsecond <- sum(prob*prob*Bpost*1/N)
+
+
+```
+
+```{r}
+
+par(mfrow=c(1,2)) 
+
+plot(prob,Bpost, col="blue",type="l",lwd=2 ,lty=1,xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(Bpost,1/1000, 0.95), col=c("darkgreen", "darkgreen"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,Bprior, col="red",lty=2,lwd=2)
+lines(prob,like, col="brown",lty=3,lwd=2)
+legend(x="topright",legend=c("Beta-posterior","Beta-prior","Likelihood"), col=c("blue","red","brown"),lty=c(1,2,3), cex=0.5)
+
+
+plot(prob,Upost, col="black",type="l",lwd=2 ,lty=1,xlab = "Probability",ylab = "Probability Density")
+abline(v=conf(Upost,1/1000, 0.95), col=c("darkgreen", "darkgreen"), lty=c(1,1), lwd=c(2, 2))
+
+lines(prob,Uprior, col="red",lty=2,lwd=2)
+lines(prob,like, col="brown",lty=3,lwd=2)
+legend(x="topright",legend=c("Uniform-posterior","Uniform-prior","Likelihood"), col=c("blue","red","brown"),lty=c(1,2,3), cex=0.5)
+
+cat("The first and the second moment of the posterior of the unif prior are:", Ufirst,",", Usecond, "\n")
+cat("The first and the second moment of the posterior of the beta prior are:", Bfirst," ", Bsecond, "\n")
+
+```
+
+```{r}
+tosses <- c(1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0,0, 0)
+Uvalues <- c()
+Bvalues <- c()
+ULowt <- c()
+UUpt <- c()
+BLowt <- c()
+BUpt <- c()
+r <- 0
+vers1 = FALSE
+for (i in 1:length(tosses)){
+  n <- 1
+  r <- tosses[i]
+  N <- 1000
+  
+  prob <- seq(from = 0.1, to = N, by = 1)/N
+  like <- dbinom(x=r, size=n, prob)
+  like <- like/PartFunc(like,1/N)
+
+  if (i==1){
+    Uprior <- 1
+    Bprior <- dbeta(prob, shape1 = 2, shape2 = 3)
+  }
+  
+  Zu <- PartFunc(like*Uprior, 1/N)
+  Zb <- PartFunc(like*Bprior, 1/N)
+  
+  Upost <- like*Uprior/Zu
+  Bpost <- like*Bprior/Zb
+  
+  Ufirst <- sum(prob*Upost*1/N)
+  Usecond <- sum(prob*prob*Upost*1/N)
+  Uvalues <- append(Uvalues, Ufirst)
+  ULowt <- append(ULowt,conf(Upost,1/N,0.95)[1])
+  UUpt <- append(UUpt,conf(Upost,1/N,0.95)[2])
+    
+  Bfirst <- sum(prob*Bpost*1/N)
+  Bsecond <- sum(prob*prob*Bpost*1/N)
+  Bvalues <- append(Bvalues, Bfirst)
+  BLowt <- append(BLowt,conf(Bpost,1/N,0.95)[1])
+  BUpt <- append(BUpt,conf(Bpost,1/N,0.95)[2])
+  
+  Uprior <- Upost
+  Bprior <- Bpost
+}
+```
+
+```{r}
+Num_toss <- seq(from=1, to=length(Uvalues), by=1)
+
+plot(Num_toss,Uvalues, col="blue",type="o",lwd=2 ,lty=1, ylim=c(0,1), ylab = "Probability", xlab = "Number of tosses")
+arrows(x0=Num_toss, y0=ULowt, x1=Num_toss, y1=UUpt, code=3, angle=90, length=0.1, col = 'blue')
+lines(Num_toss,Bvalues, col="red",type="o",lty=2,lwd=2)
+arrows(x0=Num_toss, y0=BLowt, x1=Num_toss, y1=BUpt, code=3, angle=90, length=0.1, col = 'red')
+legend(x="topright",legend=c("Uniform-prior","Beta-prior"), col=c("blue","red"),lty=c(1,2), cex=0.8)
+
+cat("The result of the sequential analysis is", Bvalues[length(Bvalues)] ,Uvalues[length(Uvalues)], "with respect to 0.5 of a one-step analysis, so obviously they are the same")
+```
+
+Ex 4
+
+```{r}
+mat <- cbind(c(1,1,1,1,1),c(1,1,1,1,0),c(1,1,1,0,0),c(1,1,0,0,0),c(1,0,0,0,0),c(0,0,0,0,0))
+
+box <- sample(1:6,1)
+ph_e <- c(1,1,1,1,1,1)/6
+ph_et <- c(1,1,1,1,1,1)/6
+e <- 20
+ex_balls <- c("N")
+for (j in 1:e){
+  ball <- sample(1:5,1)
+  ext <- mat[ball,box]
+  if(ext == 1){
+    ex_balls <- append(ex_balls,"B")
+  }
+  else{
+    ex_balls <- append(ex_balls,"W")
+  }
+
+  for (i in 1:6){
+    ph_e[i] <- length(mat[,i][mat[,i] == ext])/5 * ph_e[i]
+  }
+  ph_e <- ph_e/sum(ph_e)
+  ph_et <- rbind(ph_et,ph_e)
+}
+
+par(mfrow=c(2,3)) 
+
+Extractions <- seq(from =0, to = e, by=1)
+
+plot(Extractions,ph_et[,1], col="blue",type="l",lwd=2 , ylim=c(0,1) ,lty=1,main = "Box H0", ylab = "Probability")
+
+plot(Extractions,ph_et[,2], col="black",type="l",lwd=2 , ylim=c(0,1),lty=1,main ="Box H1" , ylab = "Probability")
+
+plot(Extractions,ph_et[,3], col="red",type="l",lwd=2 , ylim=c(0,1),lty=1,main ="Box H2", ylab = "Probability" )
+
+plot(Extractions,ph_et[,4], col="darkgreen",type="l",lwd=2 , ylim=c(0,1),lty=1,main = "Box H3", ylab = "Probability")
+
+plot(Extractions,ph_et[,5], col="orange",type="l",lwd=2 , ylim=c(0,1),lty=1,main ="Box H4", ylab = "Probability" )
+
+plot(Extractions,ph_et[,6], col="brown",type="l",lwd=2 , ylim=c(0,1),lty=1,main = "Box H5", ylab = "Probability")
+
+cat("The real box tossed is H",box-1,"\n")
+cat("Probabilities of each box at the",e,"th trial is\nH0 =",ph_et[e,1],"\nH1 =",ph_et[e,2],"\nH2 =",ph_et[e,3],"\nH3 =",ph_et[e,4],"\nH4 =",ph_et[e,5],"\nH5 =",ph_et[e,6])
+```
+
+```{r}
+library(tidyverse)
+df <- data.frame(round(ph_et,3))
+Extraction <- seq(from=0, to=e, by=1)
+df <- cbind(df, Extraction)
+df <- cbind(df, ex_balls)
+df <- rename(df,H0=X1,
+              H1=X2,
+              H2=X3,
+              H3=X4,
+              H4=X5,
+              H5=X6,
+              BALL=ex_balls)
+print(df)
+```
